@@ -9,8 +9,8 @@ import pandas as pd
 import pickle
 
 # Validação com senha
-#if not util.check_password():
-#    st.stop()
+if not util.check_password():
+    st.stop()
 
 st.title('App dos dados do Titanic')
 
