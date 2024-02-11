@@ -40,3 +40,8 @@ Incluir no secrets.toml a seguinte linha
 ```commandline
 password = "streamlit1234"
 ```
+
+### Executar o App
+```commandline
+streamlit run app.py
+```
