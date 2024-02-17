@@ -7,10 +7,14 @@ import util
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
+import requests
+import json
 
 # Validação com senha
-if not util.check_password():
-    st.stop()
+#if not util.check_password():
+#    st.stop()
+
+API_URL = 'http://127.0.0.1:8000'
 
 st.title('App dos dados do Titanic')
 
@@ -19,17 +23,25 @@ data_analyses_on = st.toggle("Exibir análise de dados")
 if data_analyses_on:
 
     st.header("Dataframe")
-    dados = data_handler.load_data()
-    st.dataframe(dados)
+    #dados = data_handler.load_data()
+    response = requests.get(API_URL + "/get-titanic-data")
+    if response.status_code == 200:
+        dados_json = json.loads(response.json())
+        dados = pd.DataFrame(dados_json)
+        
+    if dados.empty == False:
+        st.dataframe(dados)
 
-    # plota um histograma das idades dos passageiros
-    st.header('Histograma das idades')
-    fig = plt.figure()
-    plt.hist(dados['Age'], bins=30)
-    plt.xlabel('Idade')
-    plt.ylabel('Quantidade')
-    st.pyplot(fig)
-
+        # plota um histograma das idades dos passageiros
+        st.header('Histograma das idades')
+        fig = plt.figure()
+        plt.hist(dados['Age'], bins=30)
+        plt.xlabel('Idade')
+        plt.ylabel('Quantidade')
+        st.pyplot(fig)
+    else:
+        st.write('Não foi possivel carregar o dataframe')
+    
     # plota um gráfico de barras com a contagem dos sobreviventes
     st.header('Sobreviventes')
     st.bar_chart(dados.Survived.value_counts())
@@ -106,47 +118,36 @@ if submit or 'survived' in st.session_state:
     # essa parte do código realiza o mapeamento dos campos p_class, sex e embarked para valores numéricos
     # o mesmo procedimento foi realizado durante o treinamento do modelo
     # assim, isso também deve ser feito aqui para haver compatibilidade nos dados
-
-    # # Mapeia o 'Sexo' e 'Embarcado' para valores numéricos.
-    # dados['Sex'] = dados['Sex'].map({'male':0, 'female':1})
-    # dados['Embarked'] = dados['Embarked'].map({'C':0, 'Q':1, 'S':2}
-
-    p_class_map = {
-        '1st': 1, 
-        '2nd': 2, 
-        '3rd': 3
-    }
-    sex_map = {
-        'Male': 0,
-        'Female': 1,
-    }
-    embarked_map = {
-        'Cherbourg': 0, 
-        'Queenstown': 1, 
-        'Southampton': 2
-    }
+    
 
     passageiro = {
-        'Pclass': p_class_map[p_class],
-        'Sex': sex_map[sex],
+        'Pclass': p_class,
+        'Sex': sex,
         'Age': age,
         'SibSp': sib_sp,
         'Parch': par_ch,
         'Fare': fare,
-        'Embarked': embarked_map[embarked]
+        'Embarked': embarked
     }
-
-    #st.write(passageiro)
-
     
     # carrega o modelo de predição já treinado e validado
-    model = pickle.load(open('./models/model.pkl', 'rb'))
+    #model = pickle.load(open('./models/model.pkl', 'rb'))
 
-    values = pd.DataFrame([passageiro])
-    result = model.predict(values)
+    #values = pd.DataFrame([passageiro])
+    #result = model.predict(values)
 
-    if len(result) == 1:
-        survived = int(result[0])
+    passageiro_json = json.dumps(passageiro)
+
+    response = requests.post(API_URL + "/predict", json=passageiro_json)
+    result = None
+
+    if response.status_code == 200:
+        result = response.json()
+    else:
+        print('Erro no request do predict')
+
+    if result is not None:
+        survived = result
 
          # verifica se o passageiro sobreviveu
         if survived == 1:
@@ -187,9 +188,16 @@ if submit or 'survived' in st.session_state:
             # escreve a mensagem na tela
             st.write(message)
             print(message)
-            
+
             # salva a predição no JSON para cálculo das métricas de avaliação do sistema
-            data_handler.save_prediction(passageiro)
+            #data_handler.save_prediction(passageiro)
+            passageiro_json = json.dumps(passageiro)
+            response = requests.post (API_URL + "/save-prediction", json=passageiro_json)
+            if response.status_code == 200:
+                print("Predição salva")
+            else:
+                print("Erro no request do save_prediction")
+
 
     # adiciona um botão para permitir o usuário realizar uma nova análise
     col1, col2, col3 = st.columns(3)
@@ -208,7 +216,13 @@ accuracy_predictions_on = st.toggle('Exibir acurácia')
 
 if accuracy_predictions_on:
     # pega todas as predições salvas no JSON
-    predictions = data_handler.get_all_predictions()
+    #predictions = data_handler.get_all_predictions()
+    response = requests.get(API_URL + "/get-all-predictions")
+    if response.status_code == 200:
+        predictions = response.json()
+    else:
+        st.write('Não foi possivel carregar o histórico de predições.')
+
     # salva o número total de predições realizadas
     num_total_predictions = len(predictions)
     
