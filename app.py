@@ -16,6 +16,8 @@ import json
 
 API_URL = 'http://127.0.0.1:8000'
 
+st.set_page_config(page_title="App dos dados do Titanic")
+
 st.title('App dos dados do Titanic')
 
 data_analyses_on = st.toggle("Exibir análise de dados")
@@ -210,45 +212,81 @@ if submit or 'survived' in st.session_state:
             st.rerun()
 
 # calcula e exibe as métricas de avaliação do modelo
-# aqui, somente a acurária está sendo usada
-# TODO: adicionar as mesmas métricas utilizadas na disciplina de treinamento e validação do modelo (recall, precision, F1-score)
-accuracy_predictions_on = st.toggle('Exibir acurácia')
+metrics_predictions_on = st.toggle('Exibir métricas')
 
-if accuracy_predictions_on:
+if metrics_predictions_on:
     # pega todas as predições salvas no JSON
-    #predictions = data_handler.get_all_predictions()
     response = requests.get(API_URL + "/get-all-predictions")
     if response.status_code == 200:
         predictions = response.json()
     else:
         st.write('Não foi possivel carregar o histórico de predições.')
 
-    # salva o número total de predições realizadas
-    num_total_predictions = len(predictions)
+    if len(predictions) > 0:
+        r_vp = 0
+        r_vn = 0
+        r_fp = 0
+        r_fn = 0
+
+        # calcula o número de predições corretas e salva os resultados conforme as predições foram sendo realizadas
+        accuracy_hist = [0]
     
-    # calcula o número de predições corretas e salva os resultados conforme as predições foram sendo realizadas
-    accuracy_hist = [0]
-    # salva o numero de predições corretas
-    correct_predictions = 0
-    # percorre cada uma das predições, salvando o total móvel e o número de predições corretas
-    for index, passageiro in enumerate(predictions):
-        total = index + 1
-        if passageiro['CorrectPrediction'] == True:
-            correct_predictions += 1
-            
-        # calcula a acurracia movel
-        temp_accuracy = correct_predictions / total if total else 0
-        # salva o valor na lista de historico de acuracias
-        accuracy_hist.append(round(temp_accuracy, 2)) 
-    
-    # calcula a acuracia atual
-    accuracy = correct_predictions / num_total_predictions if num_total_predictions else 0
-    
-    # exibe a acuracia atual para o usuário
-    st.metric(label='Acurácia', value=round(accuracy, 2))
-    # TODO: usar o attr delta do st.metric para exibir a diferença na variação da acurácia
-    
-    # exibe o histórico da acurácia
-    st.subheader("Histórico de acurácia")
-    st.line_chart(accuracy_hist)
+        # percorre cada uma das predições, salvando o total móvel e o número de predições corretas
+        for index, dados in enumerate(predictions):
+            if dados['CorrectPrediction'] == True:
+                if dados['Survived'] == 1:
+                    r_vp += 1
+                else:
+                    r_vn += 1
+            else:
+                if dados['Survived'] == 1:
+                    r_fp += 1
+                else:
+                    r_fn += 1
+                
+            # calcula a acurácia móvel para depois montar o gráfico
+            temp_accuracy = (r_vp + r_vn) / (index + 1)
+            accuracy_hist.append(round(temp_accuracy, 2))
+        
+        # calcula a acurácia atual
+        accuracy = (r_vp + r_vn) / len(predictions) #if num_total_predictions else 0
+
+        #st.write('vp =' + str(r_vp))
+        #st.write('vn =' + str(r_vn))
+        #st.write('fp =' + str(r_fp))
+        #st.write('fn =' + str(r_fn))
+
+        # calcula a precisão atual
+        precision = r_vp / (r_vp + r_fp) if r_vp > 0 or r_fp > 0 else 0
+
+        # calcula o recall
+        recall = r_vp / (r_vp + r_fn) if r_vp > 0 or r_fn > 0 else 0
+
+        # calcula o fator f1
+        f1_score = 2 * ((precision * recall)/(precision * recall)) if precision > 0 or recall > 0 else 0
+        
+        
+        # TODO: usar o attr delta do st.metric para exibir a diferença na variação da acurácia
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            # exibe a Acurácia atual
+            st.metric(label='Acurácia (Accuracy)', value=round(accuracy, 2))
+
+        with col2:
+            # exibe a Precisão atual
+            st.metric(label='Precisão (Precision)', value=round(precision, 2))
+
+        with col3:
+            # exibe o Recall atual
+            st.metric(label='Revocação (Recall)', value=round(recall, 2))
+        
+        with col4:
+            # exibe o Fator F1 atual
+            st.metric(label='Fator F1 (F1-Score)', value=round(f1_score, 2))
+        
+        # exibe o histórico da acurácia
+        st.subheader("Histórico de acurácia")
+        st.line_chart(accuracy_hist)
 
